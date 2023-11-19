@@ -9,7 +9,7 @@ option optimize_for = SPEED;
 package posts;
 
 service PostService {
-    rpc GetPost (GetPostRequest) returns (Post) {}
+    rpc GetPost (GetPostRequest) returns (GetPostResponse) {}
 
     rpc ListPosts (ListPostsRequest) returns (ListPostsResponse) {}
 
@@ -29,9 +29,21 @@ message Post {
     google.protobuf.Timestamp createdDate = 4;
 }
 
+message PostNotFound {
+    int32 statusCode = 1;
+    string body = 2;
+}
+
 // The get post request message containing the post id
 message GetPostRequest {
     string id = 1;
+}
+
+message GetPostResponse {
+    oneof response {
+        Post post = 1;
+        PostNotFound notFound = 2;
+    }
 }
 
 message ListPostsRequest {

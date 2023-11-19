@@ -3,6 +3,7 @@
 
 use crate::post_service::create_post_response::Response;
 use crate::post_service::post_service_client::PostServiceClient;
+use crate::post_service::GetPostResponse;
 use hyper::client::HttpConnector;
 use hyper::Client;
 use serde::Serialize;
@@ -11,7 +12,7 @@ use tauri::updater::UpdateResponse;
 use tauri::{App, CustomMenuItem, Manager, Menu, MenuItem, Submenu};
 use tonic;
 use tonic::body::BoxBody;
-use tonic::IntoRequest;
+use tonic::{IntoRequest, Status};
 use tonic_web::{GrpcWebCall, GrpcWebClientLayer, GrpcWebClientService};
 
 pub mod post_service {
@@ -119,15 +120,37 @@ async fn get_post(id: &str) -> Result<String, String> {
 
     let result = match client.get_post(request).await {
         Ok(r) => {
-            let post = r.into_inner();
-            Ok(to_value(ServicePost {
-                id: post.id,
-                user_id: post.user_id,
-                body: post.body,
-                // created_date: post.created_date.unwrap()
-            })
-            .unwrap()
-            .to_string())
+            println!("The result was {:?}", r);
+            match r.into_inner().response {
+                Some(response) => {
+                    match response {
+                        GetPostResponse::Response::Post(post) => {
+                            let servicePost = ServicePost {
+                                id: post.id,
+                                user_id: post.user_id,
+                                body: post.body,
+                                // created_date: post.created_date.unwrap()
+                            };
+                            println!(
+                                "The returned service post was id: {} body: {} user id: {}",
+                                servicePost.id, servicePost.body, servicePost.user_id
+                            );
+                            Ok(to_value(servicePost).unwrap().to_string())
+                        }
+                        GetPostResponse::Response::NotFound(_) => Err(to_value(GetPostError {
+                            reason: response.message().clone().to_string(),
+                        })
+                        .unwrap()
+                        .to_string()),
+                    }
+                    .expect("TODO: panic message");
+                }
+                None => Err(to_value(GetPostError {
+                    reason: "Received no response".into(),
+                })
+                .unwrap()
+                .to_string()),
+            };
         }
         Err(s) => Err(to_value(GetPostError {
             reason: s.message().clone().to_string(),
