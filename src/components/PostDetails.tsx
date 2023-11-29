@@ -10,13 +10,41 @@ import ListItem from "@mui/material/ListItem";
 import ListItemText from "@mui/material/ListItemText";
 
 export function PostDetails() {
-    const [postDetails, setPostDetails] = useState("");
+    class Post {
+        id: string;
+        user_id: string;
+        body: string;
+
+
+        static toInstance<T>(obj: T, json: string) : T {
+            var jsonObj = JSON.parse(json);
+
+            if (typeof obj["fromJSON"] === "function") {
+                obj["fromJSON"](jsonObj);
+            }
+            else {
+                for (var propName in jsonObj) {
+                    obj[propName] = jsonObj[propName]
+                }
+            }
+
+            return obj;
+        }
+    }
+
+
+    const [postBody, setPostBody] = useState("");
+    const [postUserId, setPostUserId] = useState("");
     const [id, setPostId] = useState("");
 
     async function getPost() {
         console.log("Attempting to get post")
         // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
-        setPostDetails(await invoke("get_post", { id }));
+        var result: string = await invoke("get_post", {id})
+        var post = Post.toInstance(new Post, result)
+        console.log("The success result was ", post.body)
+        setPostUserId(post.user_id);
+        setPostBody(post.body);
     }
 
     function handleOnChenge(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
@@ -46,10 +74,13 @@ export function PostDetails() {
             </Box>
             <List>
                 <ListItem>
-                    <ListItemText primary="Date" secondary={postDetails} />
+                    <ListItemText primary="User Id" secondary={postUserId} />
+                </ListItem>
+                <ListItem>
+                    <ListItemText primary="Body" secondary={postBody} />
                 </ListItem>
             </List>
-            <Typography variant="body1" color="text.primary" align="center">{postDetails}</Typography>
+            <Typography variant="body1" color="text.primary" align="center">{postBody}</Typography>
         </Container>
     )
 }

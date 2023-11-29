@@ -1,16 +1,17 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use crate::post_service::create_post_response::Response;
+use crate::post_service::{create_post_response, get_post_response};
 use crate::post_service::post_service_client::PostServiceClient;
-use crate::post_service::get_post_response;
 use hyper::client::HttpConnector;
 use hyper::Client;
+use prost_types::Timestamp;
 use serde::Serialize;
 use serde_json::to_value;
 use tauri::{CustomMenuItem, Manager, Menu, Submenu};
 use tonic;
 use tonic::body::BoxBody;
+use tonic::IntoRequest;
 use tonic_web::{GrpcWebCall, GrpcWebClientLayer, GrpcWebClientService};
 
 pub mod post_service {
@@ -27,7 +28,8 @@ pub struct ServicePost {
     id: String,
     user_id: String,
     body: String,
-    // created_date: Timestamp
+    // #[serde(with = "ts_nanoseconds")]
+    // created_date: DateTime<Utc>
 }
 
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
@@ -57,17 +59,17 @@ async fn create_post(user_id: &str, body: &str) -> Result<String, String> {
         Ok(r) => {
             let response = r.into_inner().response.unwrap();
             match response {
-                Response::Success(r) => {
+                create_post_response::Response::Success(r) => {
                     Ok(to_value(ServicePost {
                         id: r.post.clone().unwrap().id,
                         user_id: r.post.clone().unwrap().user_id,
                         body: r.post.clone().unwrap().body,
-                        // created_date: post.created_date.unwrap()
+                        // created_date: prost_types::Timestamp //r.post.unwrap().created_date.unwrap()
                     })
                     .unwrap()
                     .to_string())
                 }
-                Response::Failure(_ex) => {
+                create_post_response::Response::Failure(_ex) => {
                     // Err(to_value(GetPostError {
                     //     reason: ex.errors.to_string(),
                     // })
@@ -118,43 +120,26 @@ async fn get_post(id: &str) -> Result<String, String> {
 
     let result: Result<String, String> = match client.get_post(request).await {
         Ok(r) => {
-            println!("The result was {:?}", r);
-            match r.into_inner().response {
-                Some(response) => {
-                    match response {
-                        get_post_response::Response::Post(post) => {
-                            let service_post = ServicePost {
-                                id: post.id,
-                                user_id: post.user_id,
-                                body: post.body,
-                                // created_date: post.created_date.unwrap()
-                            };
-                            println!(
-                                "The returned service post was id: {} body: {} user id: {}",
-                                service_post.id, service_post.body, service_post.user_id
-                            );
-                            Ok(to_value(service_post).unwrap().to_string())
-                        }
-                        get_post_response::Response::NotFound(x) => {
-                            Err(to_value(GetPostError {
-                                reason: x.body.clone().to_string(),
-                            }).unwrap().to_string())
-                        },
-                    }
+            let response = r.into_inner().response.unwrap();
+            println!("The result was {:?}", response);
+            match response {
+                get_post_response::Response::Post(p) => {
+                    Ok(to_value(ServicePost { id: p.id, user_id: p.user_id, body: p.body }).unwrap().to_string())
                 }
-                None => {
-                    Err(
-                        to_value(GetPostError {
-                            reason: "Received no response".into(),
-                        })
-                        .unwrap().to_string()
-                    )
-                },
+                get_post_response::Response::NotFound(_) => {
+                    Err(to_value(GetPostError {
+                        reason: "post was not found.".into(),
+                    }))
+                        .unwrap()
+                        .to_string()
+                }
             }
         }
         Err(s) => Err(to_value(GetPostError {
-            reason: s.message().to_string(),
-        }).unwrap().to_string()),
+            reason: s.message().clone().to_string(),
+        })
+            .unwrap()
+            .to_string()),
     };
 
     result
