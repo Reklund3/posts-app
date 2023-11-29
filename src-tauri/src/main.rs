@@ -129,9 +129,10 @@ async fn get_post(id: &str) -> Result<String, String> {
                 get_post_response::Response::NotFound(_) => {
                     Err(to_value(GetPostError {
                         reason: "post was not found.".into(),
-                    }))
+                    })
                         .unwrap()
                         .to_string()
+                    )
                 }
             }
         }
